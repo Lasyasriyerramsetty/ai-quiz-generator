@@ -1,0 +1,6 @@
+flask
+python-pptx
+anthropic
+python-dotenv
+openai
+gunicorn

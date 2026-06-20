@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Quiz Generator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cyan:      #00d4ff;
+      --cyan-dk:   #0099bb;
+      --gold:      #fbbf24;
+      --gold-dk:   #d97706;
+      --purple:    #a78bfa;
+      --green:     #10b981;
+      --green-dk:  #059669;
+      --red:       #f43f5e;
+      --glass-bg:  rgba(255,255,255,0.06);
+      --glass-bdr: rgba(255,255,255,0.13);
+      --text:      #f1f5f9;
+      --text-sm:   #94a3b8;
+      --surface:   rgba(255,255,255,0.04);
+    }
+
+    /* ── BACKGROUND ── */
+    body {
+      min-height: 100vh;
+      background: #080c18;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 12px 60px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    .bg-orbs { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: .35;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+    .orb-1 { width: 500px; height: 500px; background: radial-gradient(circle, #5b21b6, transparent 70%); top: -150px; left: -100px; animation-duration: 20s; }
+    .orb-2 { width: 400px; height: 400px; background: radial-gradient(circle, #0e7490, transparent 70%); top: 30%; right: -120px; animation-duration: 25s; animation-delay: -8s; }
+    .orb-3 { width: 350px; height: 350px; background: radial-gradient(circle, #92400e, transparent 70%); bottom: -100px; left: 30%; animation-duration: 22s; animation-delay: -4s; }
+    @keyframes drift { 0%{transform:translate(0,0) scale(1)} 100%{transform:translate(40px,30px) scale(1.1)} }
+
+    /* Star particles */
+    .stars { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+    .star {
+      position: absolute; border-radius: 50%;
+      background: #fff; opacity: 0;
+      animation: twinkle var(--d, 3s) ease-in-out infinite;
+      animation-delay: var(--delay, 0s);
+    }
+    @keyframes twinkle { 0%,100%{opacity:0;transform:scale(.5)} 50%{opacity:.7;transform:scale(1)} }
+
+    /* ── WRAPPER ── */
+    .wrapper { position: relative; z-index: 1; width: 100%; max-width: 680px; }
+
+    /* ── LOGO BAR ── */
+    .logo-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 4px; margin-bottom: 20px;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 1.15rem; font-weight: 800; letter-spacing: -.02em;
+    }
+    .logo-icon {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: .9rem; color: #000;
+      box-shadow: 0 0 16px rgba(0,212,255,.5);
+    }
+    .logo-text { background: linear-gradient(90deg, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .step-pill {
+      font-size: .78rem; font-weight: 700; color: var(--text-sm);
+      background: var(--glass-bg); border: 1px solid var(--glass-bdr);
+      padding: 5px 14px; border-radius: 20px; letter-spacing: .04em;
+    }
+
+    /* ── GLASS CARD ── */
+    .card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px);
+      border: 1px solid var(--glass-bdr);
+      border-radius: 24px;
+      padding: 32px 28px 36px;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+
+    /* ── SCREEN TRANSITIONS ── */
+    .screen { display: none; }
+    .screen.active { display: block; animation: screenIn .4s cubic-bezier(.22,1,.36,1) both; }
+    @keyframes screenIn { from{opacity:0;transform:translateY(22px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+
+    /* ── HEADINGS ── */
+    .card-title { font-size: 1.5rem; font-weight: 800; margin-bottom: 6px; line-height: 1.2; }
+    .card-sub   { font-size: .88rem; color: var(--text-sm); margin-bottom: 28px; }
+    .tag { display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 3px 10px; border-radius: 6px; margin-bottom: 10px; }
+    .tag-cyan   { background: rgba(0,212,255,.15); color: var(--cyan); border: 1px solid rgba(0,212,255,.3); }
+    .tag-purple { background: rgba(167,139,250,.15); color: var(--purple); border: 1px solid rgba(167,139,250,.3); }
+    .tag-gold   { background: rgba(251,191,36,.15); color: var(--gold); border: 1px solid rgba(251,191,36,.3); }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 13px 26px; border-radius: 12px; font-size: .95rem; font-weight: 700;
+      cursor: pointer; border: none; transition: all .2s; font-family: inherit;
+      letter-spacing: .01em;
+    }
+    .btn-cyan {
+      background: linear-gradient(135deg, var(--cyan), #0099cc);
+      color: #000; box-shadow: 0 0 20px rgba(0,212,255,.35);
+    }
+    .btn-cyan:hover:not(:disabled) { box-shadow: 0 0 32px rgba(0,212,255,.6); transform: translateY(-1px); }
+    .btn-gold {
+      background: linear-gradient(135deg, var(--gold), var(--gold-dk));
+      color: #000; box-shadow: 0 0 20px rgba(251,191,36,.35);
+    }
+    .btn-gold:hover:not(:disabled) { box-shadow: 0 0 32px rgba(251,191,36,.6); transform: translateY(-1px); }
+    .btn-ghost {
+      background: var(--surface); color: var(--text-sm);
+      border: 1px solid var(--glass-bdr);
+    }
+    .btn-ghost:hover:not(:disabled) { background: var(--glass-bg); color: var(--text); }
+    .btn-full { width: 100%; padding: 15px; font-size: 1rem; border-radius: 14px; }
+    .btn:disabled { opacity: .35; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+    .btn-icon { font-size: 1.1rem; }
+
+    /* ── UPLOAD SCREEN ── */
+    .drop-zone {
+      border: 2px dashed rgba(0,212,255,.4);
+      border-radius: 18px;
+      padding: 50px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .25s;
+      background: rgba(0,212,255,.03);
+      position: relative; overflow: hidden;
+    }
+    .drop-zone::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, rgba(0,212,255,.06) 0%, transparent 70%);
+      opacity: 0; transition: opacity .3s;
+    }
+    .drop-zone:hover::before, .drop-zone.drag-over::before { opacity: 1; }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--cyan);
+      box-shadow: 0 0 30px rgba(0,212,255,.15), inset 0 0 30px rgba(0,212,255,.05);
+    }
+    #file-input { display: none; }
+
+    .upload-icon-wrap {
+      width: 72px; height: 72px; margin: 0 auto 20px;
+      background: linear-gradient(135deg, rgba(0,212,255,.2), rgba(167,139,250,.2));
+      border: 1px solid rgba(0,212,255,.3); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      animation: floatUp 3s ease-in-out infinite;
+      font-size: 1.8rem;
+    }
+    @keyframes floatUp { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+
+    .drop-zone h2 { font-size: 1.1rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .drop-zone p  { font-size: .83rem; color: var(--text-sm); }
+
+    .file-success {
+      display: none; margin-top: 16px;
+      background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.3);
+      border-radius: 14px; padding: 16px 18px;
+      align-items: center; gap: 14px;
+    }
+    .file-success.show { display: flex; animation: popIn .3s cubic-bezier(.22,1,.36,1); }
+    @keyframes popIn { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:scale(1)} }
+    .success-icon { font-size: 1.5rem; flex-shrink: 0; }
+    .file-info    { flex: 1; }
+    .file-info .fname { font-weight: 700; font-size: .92rem; }
+    .file-info .fmeta { font-size: .78rem; color: var(--text-sm); margin-top: 2px; }
+    .ready-tag { font-size: .72rem; font-weight: 800; color: var(--green); background: rgba(16,185,129,.15); padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+
+    .file-error {
+      display: none; margin-top: 12px;
+      background: rgba(244,63,94,.1); border: 1px solid rgba(244,63,94,.3);
+      border-radius: 10px; padding: 10px 16px;
+      font-size: .84rem; color: var(--red);
+    }
+    .file-error.show { display: block; }
+
+    .upload-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 22px; }
+    .upload-actions p { font-size: .8rem; color: var(--text-sm); }
+
+    /* ── CONFIGURE SCREEN ── */
+    .source-badge {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface); border: 1px solid var(--glass-bdr);
+      border-radius: 12px; padding: 12px 16px;
+      font-size: .88rem; margin-bottom: 28px;
+    }
+    .source-badge .src-icon { font-size: 1.1rem; }
+    .source-badge .src-name { font-weight: 600; }
+    .source-badge .src-meta { font-size: .75rem; color: var(--text-sm); margin-left: auto; }
+
+    .cfg-label {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: .82rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--text-sm); margin-bottom: 12px;
+    }
+    .cfg-label .val {
+      font-size: 1.1rem; font-weight: 800; color: var(--cyan);
+      background: rgba(0,212,255,.1); padding: 2px 12px; border-radius: 8px;
+      letter-spacing: 0; text-transform: none;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 6px; border-radius: 3px; outline: none; cursor: pointer;
+      background: linear-gradient(to right, var(--cyan) 0%, var(--cyan) var(--pct, 16.67%), rgba(255,255,255,.12) var(--pct, 16.67%), rgba(255,255,255,.12) 100%);
+      margin-bottom: 6px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%;
+      background: #fff; border: 3px solid var(--cyan);
+      box-shadow: 0 0 12px rgba(0,212,255,.6); cursor: pointer;
+    }
+    .range-labels { display: flex; justify-content: space-between; font-size: .73rem; color: var(--text-sm); margin-bottom: 28px; }
+
+    .diff-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 8px; }
+    .diff-card {
+      padding: 14px 10px; border-radius: 14px; text-align: center; cursor: pointer;
+      border: 1.5px solid var(--glass-bdr); background: var(--surface);
+      transition: all .2s; position: relative; overflow: hidden;
+    }
+    .diff-card .diff-emoji { font-size: 1.5rem; display: block; margin-bottom: 6px; }
+    .diff-card .diff-name  { font-size: .85rem; font-weight: 700; color: var(--text-sm); }
+    .diff-card.selected { border-color: var(--gold); background: rgba(251,191,36,.08); }
+    .diff-card.selected .diff-name { color: var(--gold); }
+    .diff-card.selected::after {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(circle at center, rgba(251,191,36,.1), transparent 70%);
+    }
+    .diff-card:hover:not(.selected) { border-color: rgba(255,255,255,.25); transform: translateY(-2px); }
+    .diff-hint { font-size: .78rem; color: var(--text-sm); min-height: 18px; margin-bottom: 24px; padding: 0 4px; }
+
+    /* ── QUIZ SCREEN ── */
+    .quiz-header { margin-bottom: 22px; }
+    .q-progress-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .prog-track { flex: 1; height: 5px; background: rgba(255,255,255,.1); border-radius: 3px; overflow: hidden; }
+    .prog-fill  { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), var(--purple)); transition: width .4s ease; box-shadow: 0 0 8px rgba(0,212,255,.5); }
+
+    .timer-ring-wrap { position: relative; width: 46px; height: 46px; flex-shrink: 0; }
+    .timer-ring { width: 46px; height: 46px; transform: rotate(-90deg); }
+    .timer-ring-bg   { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 3; }
+    .timer-ring-fill { fill: none; stroke: var(--cyan); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 126; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear, stroke .5s; }
+    .timer-ring-fill.warn  { stroke: var(--gold); }
+    .timer-ring-fill.urgent{ stroke: var(--red); }
+    .timer-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: .68rem; font-weight: 800; color: var(--text); }
+
+    .q-number { font-size: .72rem; font-weight: 800; letter-spacing: .1em; color: var(--cyan); margin-bottom: 10px; }
+    .q-text   { font-size: 1.12rem; font-weight: 700; line-height: 1.5; margin-bottom: 22px; }
+
+    .options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+    .opt {
+      display: flex; align-items: center; gap: 14px;
+      padding: 15px 16px; border-radius: 14px;
+      border: 1.5px solid var(--glass-bdr); background: var(--surface);
+      cursor: pointer; transition: all .18s; font-family: inherit;
+      font-size: .93rem; color: var(--text); width: 100%; text-align: left;
+      position: relative; overflow: hidden;
+    }
+    .opt::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(90deg, rgba(0,212,255,.04), transparent);
+      opacity: 0; transition: opacity .2s;
+    }
+    .opt:hover:not(:disabled)::before { opacity: 1; }
+    .opt:hover:not(:disabled) { border-color: rgba(0,212,255,.4); transform: translateX(3px); }
+    .opt.selected {
+      border-color: var(--gold); background: rgba(251,191,36,.07);
+      box-shadow: 0 0 20px rgba(251,191,36,.1), inset 0 0 20px rgba(251,191,36,.03);
+    }
+    .opt.selected .opt-badge { background: var(--gold); color: #000; box-shadow: 0 0 10px rgba(251,191,36,.6); }
+    .opt-badge {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: .8rem;
+      background: rgba(255,255,255,.08); color: var(--text-sm);
+      transition: all .2s; border: 1.5px solid rgba(255,255,255,.12);
+    }
+    .opt-check { margin-left: auto; font-size: 1rem; display: none; color: var(--gold); flex-shrink: 0; }
+    .opt.selected .opt-check { display: block; }
+    .opt-text { flex: 1; }
+
+    .quiz-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .quiz-nav .btn { min-width: 120px; }
+
+    /* ── RESULTS SCREEN ── */
+    .score-hero {
+      text-align: center; margin-bottom: 28px; position: relative;
+    }
+    .score-ring-outer {
+      position: relative; width: 150px; height: 150px; margin: 0 auto 20px;
+    }
+    .score-svg { width: 150px; height: 150px; transform: rotate(-90deg); }
+    .score-track { fill: none; stroke: rgba(255,255,255,.08); stroke-width: 10; }
+    .score-arc   { fill: none; stroke-width: 10; stroke-linecap: round; stroke-dasharray: 408; stroke-dashoffset: 408; transition: stroke-dashoffset 1.2s cubic-bezier(.22,1,.36,1); }
+    .score-arc.green  { stroke: url(#arcGrad); filter: drop-shadow(0 0 8px rgba(16,185,129,.6)); }
+    .score-arc.yellow { stroke: url(#arcGradY); filter: drop-shadow(0 0 8px rgba(251,191,36,.6)); }
+    .score-arc.red    { stroke: url(#arcGradR); filter: drop-shadow(0 0 8px rgba(244,63,94,.6)); }
+    .score-center-text {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .score-big  { font-size: 2rem; font-weight: 900; line-height: 1; }
+    .score-pct  { font-size: .82rem; color: var(--text-sm); font-weight: 600; margin-top: 2px; }
+    .score-headline { font-size: 1.25rem; font-weight: 800; margin-bottom: 4px; }
+    .score-sub      { font-size: .82rem; color: var(--text-sm); margin-bottom: 14px; }
+    .score-pills { display: flex; gap: 10px; justify-content: center; }
+    .spill {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px;
+      border-radius: 20px; font-size: .82rem; font-weight: 700;
+    }
+    .spill-green { background: rgba(16,185,129,.15); color: var(--green); border: 1px solid rgba(16,185,129,.3); }
+    .spill-red   { background: rgba(244,63,94,.15);  color: var(--red);   border: 1px solid rgba(244,63,94,.3); }
+
+    .divider { height: 1px; background: var(--glass-bdr); margin: 24px 0; }
+    .section-heading { font-size: .72rem; font-weight: 800; letter-spacing: .1em; color: var(--cyan); margin-bottom: 14px; }
+
+    .review-list { display: flex; flex-direction: column; gap: 10px; }
+    .rv-card {
+      border-radius: 14px; padding: 16px;
+      border: 1.5px solid rgba(255,255,255,.1);
+      background: var(--surface);
+      animation: slideIn .35s ease both;
+    }
+    .rv-card.correct { border-color: rgba(16,185,129,.3); background: rgba(16,185,129,.06); }
+    .rv-card.wrong   { border-color: rgba(244,63,94,.3);  background: rgba(244,63,94,.06); }
+    @keyframes slideIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+
+    .rv-head { display: flex; gap: 10px; align-items: flex-start; }
+    .rv-icon { font-size: 1.1rem; margin-top: 2px; flex-shrink: 0; }
+    .rv-body { flex: 1; }
+    .rv-title { font-weight: 700; font-size: .88rem; margin-bottom: 3px; }
+    .rv-ans   { font-size: .8rem; }
+    .rv-ans.ok  { color: var(--green); }
+    .rv-ans.err { color: var(--red); }
+
+    .ai-explain {
+      display: flex; gap: 10px; align-items: flex-start;
+      margin-top: 12px; padding: 12px 14px;
+      background: rgba(0,212,255,.07); border: 1px solid rgba(0,212,255,.2);
+      border-radius: 10px; font-size: .8rem; color: #a5f3fc; line-height: 1.5;
+    }
+    .ai-explain .ai-ic { flex-shrink: 0; font-size: 1rem; }
+    .ai-spin { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(0,212,255,.3); border-top-color: var(--cyan); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px; }
+
+    .result-btns { display: flex; gap: 12px; margin-top: 28px; flex-wrap: wrap; }
+    .result-btns .btn { min-width: 160px; }
+
+    /* ── LOADING OVERLAY ── */
+    #overlay {
+      display: none; position: fixed; inset: 0; z-index: 999;
+      background: rgba(8,12,24,.85); backdrop-filter: blur(8px);
+      flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+    }
+    #overlay.show { display: flex; animation: fadeIn .25s ease; }
+    @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+    .loader-ring {
+      width: 60px; height: 60px; border-radius: 50%;
+      border: 4px solid rgba(0,212,255,.15);
+      border-top-color: var(--cyan); border-right-color: var(--purple);
+      animation: spin .9s linear infinite;
+      box-shadow: 0 0 24px rgba(0,212,255,.3);
+    }
+    .loader-text { font-size: .95rem; font-weight: 600; color: var(--text-sm); letter-spacing: .03em; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── MISC ── */
+    @media (max-width: 520px) {
+      .card { padding: 22px 16px 28px; }
+      .diff-grid { grid-template-columns: 1fr; }
+      .score-pills, .result-btns { flex-direction: column; align-items: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Animated background -->
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+<div class="stars" id="stars"></div>
+
+<div class="wrapper">
+
+<!-- ════════ SCREEN 1 — UPLOAD ════════ -->
+<div class="screen active" id="screen-upload">
+  <div class="logo-bar">
+    <div class="logo">
+      <div class="logo-icon">Q</div>
+      <span class="logo-text">AI Quiz Generator</span>
+    </div>
+    <div class="step-pill">Step 1 of 3</div>
+  </div>
+  <div class="card">
+    <span class="tag tag-cyan">Upload</span>
+    <div class="card-title">Drop your PowerPoint</div>
+    <div class="card-sub">We'll parse every slide and extract all text for your quiz.</div>
+
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" accept=".pptx" />
+      <div class="upload-icon-wrap">☁️</div>
+      <h2>Drag &amp; drop your .pptx here</h2>
+      <p>or click to browse &nbsp;·&nbsp; .pptx only &nbsp;·&nbsp; max 25 MB</p>
+    </div>
+
+    <div class="file-error" id="file-error"></div>
+
+    <div class="file-success" id="file-result">
+      <span class="success-icon">✅</span>
+      <div class="file-info">
+        <div class="fname" id="res-filename"></div>
+        <div class="fmeta" id="res-meta"></div>
+      </div>
+      <span class="ready-tag">✓ Ready</span>
+    </div>
+
+    <div class="upload-actions">
+      <p>Slide text will be extracted before generating questions.</p>
+      <button class="btn btn-cyan" id="btn-continue" disabled onclick="goToConfigure()">
+        Continue <span style="font-size:1rem">→</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ SCREEN 2 — CONFIGURE ════════ -->
+<div class="screen" id="screen-configure">
+  <div class="logo-bar">
+    <div class="logo">
+      <div class="logo-icon">Q</div>
+      <span class="logo-text">AI Quiz Generator</span>
+    </div>
+    <div class="step-pill">Step 2 of 3</div>
+  </div>
+  <div class="card">
+    <span class="tag tag-purple">Configure</span>
+    <div class="card-title">Set up your quiz</div>
+    <div class="card-sub">Choose how many questions and how hard they should be.</div>
+
+    <div class="source-badge">
+      <span class="src-icon">📄</span>
+      <span class="src-name" id="cfg-source">—</span>
+    </div>
+
+    <div class="cfg-label">
+      Number of Questions <span class="val" id="q-count-display">10</span>
+    </div>
+    <input type="range" id="q-count" min="5" max="30" value="10"
+           oninput="updateSlider(this)" />
+    <div class="range-labels"><span>5 min</span><span>30 max</span></div>
+
+    <div class="cfg-label" style="margin-top:4px">Difficulty Level</div>
+    <div class="diff-grid">
+      <div class="diff-card" data-d="Simple" onclick="selectDiff(this)">
+        <span class="diff-emoji">🌱</span>
+        <span class="diff-name">Simple</span>
+      </div>
+      <div class="diff-card selected" data-d="Medium" onclick="selectDiff(this)">
+        <span class="diff-emoji">⚡</span>
+        <span class="diff-name">Medium</span>
+      </div>
+      <div class="diff-card" data-d="Complex" onclick="selectDiff(this)">
+        <span class="diff-emoji">🔥</span>
+        <span class="diff-name">Complex</span>
+      </div>
+    </div>
+    <div class="diff-hint" id="diff-hint">Medium → balanced recall and scenario questions.</div>
+
+    <button class="btn btn-gold btn-full" id="btn-generate" onclick="generateQuiz()">
+      <span class="btn-icon">⚡</span> Generate Quiz
+    </button>
+  </div>
+</div>
+
+<!-- ════════ SCREEN 3 — QUIZ ════════ -->
+<div class="screen" id="screen-quiz">
+  <div class="logo-bar">
+    <div class="logo">
+      <div class="logo-icon">Q</div>
+      <span class="logo-text">AI Quiz Generator</span>
+    </div>
+    <div class="step-pill" id="quiz-step-label">Question 1 of 10</div>
+  </div>
+  <div class="card">
+    <div class="quiz-header">
+      <div class="q-progress-row">
+        <div class="prog-track">
+          <div class="prog-fill" id="quiz-progress" style="width:10%"></div>
+        </div>
+        <div class="timer-ring-wrap">
+          <svg class="timer-ring" viewBox="0 0 46 46">
+            <circle class="timer-ring-bg" cx="23" cy="23" r="20"/>
+            <circle class="timer-ring-fill" id="timer-ring-fill" cx="23" cy="23" r="20"/>
+          </svg>
+          <div class="timer-center" id="timer-display">60</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="q-number" id="q-label">QUESTION 1</div>
+    <div class="q-text"  id="q-text">Loading…</div>
+
+    <div class="options" id="options-list"></div>
+
+    <div class="quiz-nav">
+      <button class="btn btn-ghost" id="btn-prev" onclick="prevQuestion()">← Prev</button>
+      <button class="btn btn-gold"  id="btn-next" onclick="nextQuestion()">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ SCREEN 4 — RESULTS ════════ -->
+<div class="screen" id="screen-results">
+  <div class="logo-bar">
+    <div class="logo">
+      <div class="logo-icon">Q</div>
+      <span class="logo-text">AI Quiz Generator</span>
+    </div>
+    <div class="step-pill">Complete 🎉</div>
+  </div>
+  <div class="card">
+    <span class="tag tag-cyan">Results</span>
+
+    <!-- SVG gradient defs -->
+    <svg width="0" height="0" style="position:absolute">
+      <defs>
+        <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stop-color="#10b981"/>
+          <stop offset="100%" stop-color="#06b6d4"/>
+        </linearGradient>
+        <linearGradient id="arcGradY" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stop-color="#f59e0b"/>
+          <stop offset="100%" stop-color="#fbbf24"/>
+        </linearGradient>
+        <linearGradient id="arcGradR" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%"   stop-color="#f43f5e"/>
+          <stop offset="100%" stop-color="#ef4444"/>
+        </linearGradient>
+      </defs>
+    </svg>
+
+    <div class="score-hero">
+      <div class="score-ring-outer">
+        <svg class="score-svg" viewBox="0 0 150 150">
+          <circle class="score-track" cx="75" cy="75" r="65"/>
+          <circle class="score-arc green" id="score-ring-fill" cx="75" cy="75" r="65"/>
+        </svg>
+        <div class="score-center-text">
+          <div class="score-big" id="score-fraction">0/0</div>
+          <div class="score-pct"  id="score-pct">0%</div>
+        </div>
+      </div>
+      <div class="score-headline" id="score-headline">Quiz complete!</div>
+      <div class="score-sub"      id="score-sub"></div>
+      <div class="score-pills">
+        <span class="spill spill-green" id="pill-correct">✓ 0 correct</span>
+        <span class="spill spill-red"   id="pill-wrong">✗ 0 wrong</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-heading">REVIEW &amp; AI FEEDBACK</div>
+    <div class="review-list" id="review-list"></div>
+
+    <div class="result-btns">
+      <button class="btn btn-gold" onclick="retakeQuiz()">⟳ &nbsp;Retake Quiz</button>
+      <button class="btn btn-ghost" onclick="uploadNew()">↑ &nbsp;Upload New PPT</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /wrapper -->
+
+<!-- Loading overlay -->
+<div id="overlay">
+  <div class="loader-ring"></div>
+  <div class="loader-text" id="overlay-msg">Generating your quiz…</div>
+</div>
+
+<script>
+/* ── STARS ── */
+(function(){
+  const wrap = document.getElementById('stars');
+  for(let i=0;i<60;i++){
+    const s = document.createElement('div');
+    s.className = 'star';
+    const sz = Math.random()*2+1;
+    s.style.cssText = `width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;--d:${2+Math.random()*4}s;--delay:${-Math.random()*5}s`;
+    wrap.appendChild(s);
+  }
+})();
+
+/* ── SLIDER TRACK ── */
+function updateSlider(el){
+  const pct = ((el.value - el.min)/(el.max - el.min)*100).toFixed(1)+'%';
+  el.style.setProperty('--pct', pct);
+  document.getElementById('q-count-display').textContent = el.value;
+}
+document.getElementById('q-count').addEventListener('input', function(){ updateSlider(this); });
+updateSlider(document.getElementById('q-count'));
+
+/* ── STATE ── */
+const S = {
+  parsedData: null, questions: [], userAnswers: {},
+  currentIdx: 0, timerInterval: null, timeLeft: 60,
+  selectedDifficulty: 'Medium', filename: '', slideCount: 0,
+};
+
+const DIFF_HINTS = {
+  Simple:  'Simple 🌱 → basic recall and definition questions.',
+  Medium:  'Medium ⚡ → balanced recall and scenario questions.',
+  Complex: 'Complex 🔥 → advanced analytical, critical thinking questions.',
+};
+
+/* ── UTILS ── */
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  const el = document.getElementById(id);
+  el.classList.add('active');
+  window.scrollTo(0,0);
+}
+function showOverlay(msg){ document.getElementById('overlay-msg').textContent=msg; document.getElementById('overlay').classList.add('show'); }
+function hideOverlay(){ document.getElementById('overlay').classList.remove('show'); }
+
+/* ── UPLOAD ── */
+const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('file-input');
+dropZone.addEventListener('click',()=>fileInput.click());
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag-over');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag-over');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+fileInput.addEventListener('change',()=>{if(fileInput.files[0])handleFile(fileInput.files[0]);});
+
+function handleFile(file){
+  const errEl = document.getElementById('file-error');
+  errEl.className='file-error';
+  if(!file.name.toLowerCase().endsWith('.pptx')){
+    errEl.textContent='❌ Invalid file type. Only .pptx files are accepted.';
+    errEl.className='file-error show'; return;
+  }
+  if(file.size>25*1024*1024){
+    errEl.textContent='❌ File exceeds the 25 MB limit. Please use a smaller file.';
+    errEl.className='file-error show'; return;
+  }
+  showOverlay('Parsing your presentation…');
+  const fd=new FormData(); fd.append('file',file);
+  fetch('/api/upload',{method:'POST',body:fd})
+    .then(r=>r.json())
+    .then(data=>{
+      hideOverlay();
+      if(data.error){errEl.textContent='❌ '+data.error;errEl.className='file-error show';return;}
+      S.parsedData=data; S.filename=data.filename; S.slideCount=data.slide_count;
+      document.getElementById('res-filename').textContent=data.filename;
+      document.getElementById('res-meta').textContent=`Parsed successfully · ${data.slide_count} slides · ${data.word_count.toLocaleString()} words extracted`;
+      document.getElementById('file-result').className='file-success show';
+      document.getElementById('btn-continue').disabled=false;
+    })
+    .catch(()=>{hideOverlay();errEl.textContent='❌ Upload failed. Check your connection.';errEl.className='file-error show';});
+}
+
+function goToConfigure(){
+  document.getElementById('cfg-source').textContent=`${S.filename} · ${S.slideCount} slides`;
+  show('screen-configure');
+}
+
+/* ── CONFIGURE ── */
+function selectDiff(el){
+  document.querySelectorAll('.diff-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  S.selectedDifficulty=el.dataset.d;
+  document.getElementById('diff-hint').textContent=DIFF_HINTS[el.dataset.d];
+}
+
+function generateQuiz(){
+  const numQ=parseInt(document.getElementById('q-count').value);
+  showOverlay('AI is crafting your quiz… this may take a moment ✨');
+  fetch('/api/generate',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({slides:S.parsedData.slides,num_questions:numQ,difficulty:S.selectedDifficulty})
+  }).then(r=>r.json())
+    .then(data=>{
+      hideOverlay();
+      if(data.error){alert('Error: '+data.error);return;}
+      S.questions=data.questions; S.userAnswers={}; S.currentIdx=0;
+      startQuiz();
+    })
+    .catch(()=>{hideOverlay();alert('Failed to generate quiz. Please try again.');});
+}
+
+/* ── QUIZ ── */
+function startQuiz(){ show('screen-quiz'); renderQuestion(); }
+
+function renderQuestion(){
+  const total=S.questions.length, idx=S.currentIdx, q=S.questions[idx];
+  document.getElementById('quiz-step-label').textContent=`Question ${idx+1} of ${total}`;
+  document.getElementById('q-label').textContent=`QUESTION ${idx+1}`;
+  document.getElementById('q-text').textContent=q.question;
+  document.getElementById('quiz-progress').style.width=`${((idx+1)/total)*100}%`;
+
+  const list=document.getElementById('options-list');
+  list.innerHTML='';
+  ['A','B','C','D'].forEach(letter=>{
+    const btn=document.createElement('button');
+    btn.className='opt'+(S.userAnswers[q.id]===letter?' selected':'');
+    btn.innerHTML=`<span class="opt-badge">${letter}</span><span class="opt-text">${q.options[letter]}</span><span class="opt-check">✔</span>`;
+    btn.onclick=()=>selectAnswer(letter);
+    list.appendChild(btn);
+  });
+
+  document.getElementById('btn-prev').disabled=idx===0;
+  const isLast=idx===total-1;
+  const btnNext=document.getElementById('btn-next');
+  btnNext.textContent=isLast?'Submit Quiz ✓':'Next →';
+  btnNext.onclick=isLast?submitQuiz:nextQuestion;
+  resetTimer();
+}
+
+function selectAnswer(letter){
+  const q=S.questions[S.currentIdx];
+  S.userAnswers[q.id]=letter;
+  document.querySelectorAll('.opt').forEach((btn,i)=>{
+    btn.classList.toggle('selected',['A','B','C','D'][i]===letter);
+  });
+}
+
+function nextQuestion(){ if(S.currentIdx<S.questions.length-1){S.currentIdx++;renderQuestion();} }
+function prevQuestion(){ if(S.currentIdx>0){S.currentIdx--;renderQuestion();} }
+
+/* Timer */
+function resetTimer(){
+  clearInterval(S.timerInterval);
+  S.timeLeft=60;
+  updateTimer();
+  S.timerInterval=setInterval(()=>{
+    S.timeLeft--;
+    updateTimer();
+    if(S.timeLeft<=0){clearInterval(S.timerInterval);S.currentIdx===S.questions.length-1?submitQuiz():nextQuestion();}
+  },1000);
+}
+function updateTimer(){
+  document.getElementById('timer-display').textContent=S.timeLeft;
+  const fill=document.getElementById('timer-ring-fill');
+  const offset=126*(1-S.timeLeft/60);
+  fill.style.strokeDashoffset=offset;
+  fill.className='timer-ring-fill'+(S.timeLeft<=10?' urgent':S.timeLeft<=20?' warn':'');
+}
+
+/* ── RESULTS ── */
+function submitQuiz(){
+  clearInterval(S.timerInterval);
+  const total=S.questions.length; let correct=0; const wrongs=[];
+  S.questions.forEach(q=>{
+    const ua=S.userAnswers[q.id];
+    if(ua===q.correct) correct++;
+    else wrongs.push({question_id:q.id,question:q.question,user_answer:ua||'(none)',user_option_text:ua?q.options[ua]:'No answer selected',correct_answer:q.correct,correct_option_text:q.options[q.correct]});
+  });
+  const wrong=total-correct, pct=Math.round(correct/total*100);
+
+  document.getElementById('score-fraction').textContent=`${correct}/${total}`;
+  document.getElementById('score-pct').textContent=`${pct}%`;
+  document.getElementById('pill-correct').textContent=`✓ ${correct} correct`;
+  document.getElementById('pill-wrong').textContent=`✗ ${wrong} wrong`;
+
+  const arc=document.getElementById('score-ring-fill');
+  arc.className='score-arc '+(pct>=70?'green':pct>=40?'yellow':'red');
+
+  const headlines=[[90,'🏆 Outstanding!'],[70,`Nice work — ${correct} correct, ${wrong} to review`],[50,`Keep going — ${correct} correct`],[0,`Keep practising — ${correct} correct`]];
+  document.getElementById('score-headline').textContent=(headlines.find(([t])=>pct>=t)||headlines[3])[1];
+  document.getElementById('score-sub').textContent=`${S.selectedDifficulty} difficulty · ${S.filename} · ${S.slideCount}-slide deck`;
+
+  /* Animate ring — circumference = 2π×65 ≈ 408 */
+  setTimeout(()=>{ arc.style.strokeDashoffset=408*(1-pct/100); },120);
+
+  /* Build review cards */
+  const list=document.getElementById('review-list');
+  list.innerHTML='';
+  S.questions.forEach((q,i)=>{
+    const ua=S.userAnswers[q.id], ok=ua===q.correct;
+    const card=document.createElement('div');
+    card.className=`rv-card ${ok?'correct':'wrong'}`;
+    card.style.animationDelay=`${i*0.05}s`;
+    card.id=`rc-${q.id}`;
+    if(ok){
+      card.innerHTML=`<div class="rv-head"><span class="rv-icon">✅</span><div class="rv-body"><div class="rv-title">Q${q.id} · ${q.topic}</div><div class="rv-ans ok">Your answer: ${ua} (${q.options[ua]}) — correct</div></div></div>`;
+    } else {
+      card.innerHTML=`<div class="rv-head"><span class="rv-icon">❌</span><div class="rv-body"><div class="rv-title">Q${q.id} · ${q.topic}</div><div class="rv-ans err">Your answer: ${ua||'—'} (${ua?q.options[ua]:'No answer'}) · Correct: ${q.correct} (${q.options[q.correct]})</div></div></div><div class="ai-explain" id="ai-${q.id}"><span class="ai-ic">🤖</span><span><span class="ai-spin"></span>Loading AI explanation…</span></div>`;
+    }
+    list.appendChild(card);
+  });
+
+  show('screen-results');
+
+  if(wrongs.length>0){
+    fetch('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({wrong_answers:wrongs})})
+      .then(r=>r.json())
+      .then(data=>{
+        (data.feedback||[]).forEach(fb=>{
+          const el=document.getElementById(`ai-${fb.question_id}`);
+          if(el)el.innerHTML=`<span class="ai-ic">🤖</span><span>${fb.explanation}</span>`;
+        });
+      })
+      .catch(()=>wrongs.forEach(w=>{const el=document.getElementById(`ai-${w.question_id}`);if(el)el.innerHTML=`<span class="ai-ic">🤖</span><span>Could not load explanation.</span>`;}));
+  }
+}
+
+function retakeQuiz(){ S.userAnswers={}; S.currentIdx=0; startQuiz(); }
+function uploadNew(){
+  S.parsedData=null; S.questions={}; S.userAnswers={};
+  document.getElementById('file-result').className='file-success';
+  document.getElementById('file-error').className='file-error';
+  document.getElementById('btn-continue').disabled=true;
+  document.getElementById('file-input').value='';
+  show('screen-upload');
+}
+</script>
+</body>
+</html>
