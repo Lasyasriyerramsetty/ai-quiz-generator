@@ -702,11 +702,11 @@ function generateQuiz(){
   }).then(r=>r.json())
     .then(data=>{
       hideOverlay();
-      if(data.error){alert('Error: '+data.error);return;}
+      if(data.error){alert('Generation failed:\n\n'+data.error);return;}
       S.questions=data.questions; S.userAnswers={}; S.currentIdx=0;
       startQuiz();
     })
-    .catch(()=>{hideOverlay();alert('Failed to generate quiz. Please try again.');});
+    .catch(err=>{hideOverlay();alert('Network error: '+err.message);});
 }
 
 /* ── QUIZ ── */

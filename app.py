@@ -17,10 +17,17 @@ os.makedirs('uploads', exist_ok=True)
 API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 IS_OPENROUTER = API_KEY.startswith("sk-or-")
 
+if not API_KEY:
+    print("WARNING: ANTHROPIC_API_KEY is not set!")
+
 if IS_OPENROUTER:
     from openai import OpenAI
-    llm = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=API_KEY)
-    MODEL = "openai/gpt-oss-120b:free"
+    llm = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=API_KEY,
+        timeout=120,
+    )
+    MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 else:
     import anthropic
     llm = anthropic.Anthropic(api_key=API_KEY)
