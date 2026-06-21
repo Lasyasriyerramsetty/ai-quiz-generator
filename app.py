@@ -36,12 +36,26 @@ else:
 
 def call_llm(prompt: str, max_tokens: int = 4096) -> str:
     if IS_OPENROUTER:
-        resp = llm.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens,
-        )
-        return resp.choices[0].message.content
+        fallback_models = [
+            "openai/gpt-oss-120b:free",
+            "openai/gpt-oss-20b:free",
+            "google/gemma-4-31b-it:free",
+            "nousresearch/hermes-3-llama-3.1-405b:free",
+        ]
+        last_error = None
+        for model in fallback_models:
+            try:
+                resp = llm.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                    timeout=90,
+                )
+                return resp.choices[0].message.content
+            except Exception as e:
+                last_error = str(e)
+                continue
+        raise Exception(f"All models exhausted. Last error: {last_error[:200]}")
     else:
         resp = llm.messages.create(
             model=MODEL,
